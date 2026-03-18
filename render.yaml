@@ -3,7 +3,7 @@ services:
     name: malware-generator
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
+    startCommand: gunicorn --bind :$PORT --workers 4 main:app
     envVars:
       - key: DATABASE_URL
         fromDatabase:
