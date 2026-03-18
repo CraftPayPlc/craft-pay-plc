@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, render_template
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
 import uuid
 import os
 import random
@@ -8,6 +9,9 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///malware.db'
 app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Enable CORS
+CORS(app)
 
 db = SQLAlchemy(app)
 
@@ -91,7 +95,7 @@ def upload():
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(filepath)
     
-return jsonify({'url': f"{request.url_root}uploads/{filename}"})
+    return jsonify({'url': f"{request.url_root}uploads/{filename}"})
 
 if __name__ == '__main__':
     db.create_all()
