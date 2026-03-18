@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_sqlalchemy import SQLAlchemy
 import uuid
 import os
@@ -110,3 +110,7 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     db.create_all()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+
+@app.route('/')
+def home():
+    return render_template('index.html')
