@@ -2,6 +2,7 @@ services:
   - type: web
     name: malware-generator
     env: python
+    envVersion: 3.11
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --bind :$PORT --workers 4 main:app
     envVars:
