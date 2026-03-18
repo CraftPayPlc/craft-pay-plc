@@ -91,7 +91,7 @@ def upload():
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(filepath)
     
-    return jsonify({'url': f"https://yourdomain.com/uploads/{filename}"})
+return jsonify({'url': f"{request.url_root}uploads/{filename}"})
 
 if __name__ == '__main__':
     db.create_all()
