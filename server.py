@@ -13,10 +13,6 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 CORS(app)
 
 def generate_demonic_payload(device_id, target_app, target_amount):
-    # Validate inputs
-    if not device_id or not target_app or not target_amount:
-        raise ValueError("Missing required parameters")
-    
     # App-specific hooks for OPay and Kuda
     opay_hooks = """
     // OPay-specific hooks
