@@ -8,10 +8,15 @@
             const targetApp = document.getElementById('targetApp').value;
             const targetAmount = document.getElementById('targetAmount').value;
             
+            // Send as form data
+            const formData = new FormData();
+            formData.append('deviceId', deviceId);
+            formData.append('targetApp', targetApp);
+            formData.append('targetAmount', targetAmount);
+            
             const response = await fetch('/generate', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({deviceId, targetApp, targetAmount})
+                body: formData
             });
             
             const data = await response.json();
