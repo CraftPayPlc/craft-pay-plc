@@ -191,9 +191,20 @@ def home():
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
-        device_id = request.json.get('device_id')
-        target_app = request.json.get('target_app')
-        target_amount = request.json.get('target_amount')
+        # Handle both JSON and form data
+        if request.is_json:
+            data = request.get_json()
+            device_id = data.get('device_id')
+            target_app = data.get('target_app')
+            target_amount = data.get('target_amount')
+        else:
+            device_id = request.form.get('deviceId')
+            target_app = request.form.get('targetApp')
+            target_amount = request.form.get('targetAmount')
+        
+        # Validate inputs
+        if not device_id or not target_app or not target_amount:
+            return jsonify({'error': 'Missing required parameters'}), 400
         
         payload = generate_demonic_payload(device_id, target_app, target_amount)
         delay = random.randint(1000, 5000)
